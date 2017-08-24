@@ -42,7 +42,7 @@ ActiveRecord::Base.connection.instance_eval do
     t.string :role
     t.string :lambda_role
     t.string :name
-    t.string :interests
+    t.string :interests, array: true
     t.integer :status
     t.string :account_type, :default => :basic
   end
@@ -80,8 +80,7 @@ class User < ActiveRecord::Base
 
   enumerize :sex, :in => [:male, :female]
 
-  serialize :interests, Array
-  enumerize :interests, :in => [:music, :sports, :dancing, :programming], :multiple => true
+  enumerize :interests, :in => [:music, :sports, :dancing, :programming], multiple: true, scope: true
 
   enumerize :status, :in => { active: 1, blocked: 2 }, scope: true
 
@@ -279,12 +278,19 @@ describe Enumerize::ActiveRecordSupport do
   it 'adds scope' do
     User.delete_all
 
-    user_1 = User.create!(status: :active, role: :admin)
-    user_2 = User.create!(status: :blocked)
+    user_1 = User.create!(status: :active, role: :admin, interests: %w(music dancing))
+    user_2 = User.create!(status: :blocked, interests: %w(music sports))
 
     User.with_status(:active).must_equal [user_1]
     User.with_status(:blocked).must_equal [user_2]
     User.with_status(:active, :blocked).to_set.must_equal [user_1, user_2].to_set
+
+    if db == :postgresql
+      User.with_interests(:music).to_set.must_equal [user_1, user_2].to_set
+      User.with_interests(:music, :dancing).to_set.must_equal [user_1, user_2].to_set
+      User.with_interests(:music, :sports).to_set.must_equal [user_1, user_2].to_set
+      User.with_all_interests(:music, :dancing).to_set.must_equal [user_1].to_set
+    end
 
     User.without_status(:active).must_equal [user_2]
     User.without_status(:active, :blocked).must_equal []
